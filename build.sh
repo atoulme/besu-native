@@ -34,20 +34,47 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 SCRIPTDIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
-
 # Determine core count for parallel make
 if [[ "$OSTYPE" == "linux-gnu" ]];  then
   CORE_COUNT=$(nproc)
+  OSARCH=${OSTYPE%%[0-9.]*}-`arch`
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]];  then
   export CFLAGS="-arch x86_64 -arch arm64"
   CORE_COUNT=$(sysctl -n hw.ncpu)
+  OSARCH="darwin"
 fi
 
 # add to path cargo
 [ -f $HOME/.cargo/env ] && . $HOME/.cargo/env
 
+# add to path brew
+[ -f $HOME/.zprofile ] && . $HOME/.zprofile
+
+build_blake2bf() {
+
+  cat <<EOF
+  #############################
+  ###### build blake2bf ######
+  #############################
+EOF
+
+  if [[ "$OSTYPE" == "linux-gnu" ]];  then
+    cd "$SCRIPTDIR/blake2bf/$( arch )"
+
+    # delete old build dir, if exists
+    rm -rf "$SCRIPTDIR/blake2bf/build" || true
+
+    if [[ -e makefile ]]; then
+      make clean
+    fi
+
+    make
+    mkdir -p "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
+    mv libblake2bf.so "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
+  fi
+}
 
 build_secp256k1() {
 
@@ -67,7 +94,7 @@ EOF
   fi
 
   ./autogen.sh && \
-    ./configure --prefix="$SCRIPTDIR/secp256k1/build" $SECP256K1_BUILD_OPTS && \
+    ./configure --prefix="$SCRIPTDIR/secp256k1/build/${OSARCH}" $SECP256K1_BUILD_OPTS && \
     make -j $CORE_COUNT && \
     make -j $CORE_COUNT install
 }
@@ -93,7 +120,33 @@ EOF
     cargo build --lib --release
   fi
 
-  cp target/release/libeth_altbn128.* "$SCRIPTDIR/altbn128/build/lib"
+  mkdir -p "$SCRIPTDIR/altbn128/build/${OSARCH}/lib"
+  cp target/release/libeth_altbn128.* "$SCRIPTDIR/altbn128/build/${OSARCH}/lib"
+}
+
+build_ipa_multipoint() {
+  cat <<EOF
+  ############################
+  ###### build ipa_multipoint ######
+  ############################
+EOF
+
+  cd "$SCRIPTDIR/ipa-multipoint/ipa_multipoint_jni"
+
+  # delete old build dir, if exists
+  rm -rf "$SCRIPTDIR/ipa-multipoint/build" || true
+  mkdir -p "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
+
+  cargo clean
+
+  if [[ "$OSTYPE" == "darwin"* ]];  then
+    lipo_lib "libipa_multipoint_jni" ""
+  else
+    cargo build --lib --release
+  fi
+
+  mkdir -p "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
+  cp target/release/libipa_multipoint_jni.* "$SCRIPTDIR/ipa-multipoint/build/${OSARCH}/lib"
 }
 
 build_bls12_381() {
@@ -103,19 +156,26 @@ build_bls12_381() {
   #############################
 EOF
 
-  cd "$SCRIPTDIR/bls12-381/matterlabs-eip1962"
+  if [[ "${OSARCH}" != "linux-gnu-aarch64" ]]; then
+    echo "building bls12-381 for ${OSARCH}"
+    cd "$SCRIPTDIR/bls12-381/matterlabs-eip1962"
 
-  # delete old build dir, if exists
-  rm -rf "$SCRIPTDIR/bls12-381/build" || true
-  mkdir -p "$SCRIPTDIR/bls12-381/build/lib"
+    # delete old build dir, if exists
+    rm -rf "$SCRIPTDIR/bls12-381/build" || true
+    mkdir -p "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
 
-  cargo clean
-  if [[ "$OSTYPE" == "darwin"* ]];  then
-    lipo_lib "libeth_pairings" "--features eip_2357_c_api"
+    cargo clean
+    if [[ "$OSTYPE" == "darwin"* ]];  then
+      lipo_lib "libeth_pairings" "--features eip_2357_c_api"
+    else
+        cargo build --lib --features eip_2357_c_api --release
+    fi
+    mkdir -p "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
+    cp target/release/libeth_pairings.* "$SCRIPTDIR/bls12-381/build/${OSARCH}/lib"
   else
-      cargo build --lib --features eip_2357_c_api --release
+    echo "skipping bls12-381 on ${OSARCH}"
   fi
-  cp target/release/libeth_pairings.* "$SCRIPTDIR/bls12-381/build/lib"
+
 }
 
 build_jars(){
@@ -193,11 +253,20 @@ EOF
     lipo -info ./release/libbesu_native_ec.dylib
     lipo -info ./release/libbesu_native_ec_crypto.dylib
   fi
+
+  mkdir -p "./release/${OSARCH}"
+  echo `pwd`
+  cp ./release/libbesu_native_ec* "./release/${OSARCH}/"
+
 }
 
+build_blake2bf
 build_secp256k1
 build_altbn128
 build_bls12_381
+build_ipa_multipoint
 build_secp256r1
+
+
 build_jars
 exit
