@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
   native-build-linux-x86-64:
     runs-on: ubuntu-latest
@@ -43,6 +44,7 @@ jobs:
         with:
           name: ipa-multipoint native build artifacts
           path: ipa-multipoint/build/
+
   native-build-macos:
     runs-on: macos-latest
     env:
@@ -85,8 +87,10 @@ jobs:
         with:
           name: ipa-multipoint native build artifacts
           path: ipa-multipoint/build/
+
   native-build-m1:
-    runs-on: ["self-hosted"]
+    name: Mac Arm
+    runs-on: besu
     env:
       SKIP_GRADLE: true
     steps:
@@ -116,6 +120,7 @@ jobs:
         with:
           name: ipa-multipoint native build artifacts
           path: ipa-multipoint/build/
+
   final-assembly:
     runs-on: ubuntu-latest
     needs:
