@@ -56,16 +56,12 @@ build_blake2bf() {
 
   cat <<EOF
   #############################
-  ###### build blake2bf ######
+  ###### build blake2bf #######
   #############################
 EOF
-
-  if [[ "$OSTYPE" == "linux-gnu" ]];  then
-    if [[ $(uname -m) == 'aarch64' ]]; then
-      cd "$SCRIPTDIR/blake2bf/arm64"
-    else
-      cd "$SCRIPTDIR/blake2bf/$( arch )"
-    fi
+  # currently only available on linux (x86_64 and aarch64) and ARM based Darwin
+  if [[ "$OSTYPE" == "linux-gnu" || ( "$OSTYPE" == "darwin"* && $(uname -m) == 'arm64' ) ]];  then
+    cd "$SCRIPTDIR/blake2bf/$( arch )"
 
     # delete old build dir, if exists
     rm -rf "$SCRIPTDIR/blake2bf/build" || true
@@ -77,19 +73,6 @@ EOF
     make
     mkdir -p "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
     mv libblake2bf.so "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
-  fi
-  if [[ $(uname -m) == 'arm64' ]]; then
-    cd "$SCRIPTDIR/blake2bf/aarch64"
-     # delete old build dir, if exists
-    rm -rf "$SCRIPTDIR/blake2bf/build" || true
-
-    if [[ -e makefile ]]; then
-      make clean
-    fi
-
-    make
-    mkdir -p "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
-    mv libblake2bf.* "$SCRIPTDIR/blake2bf/build/${OSARCH}/lib"
   fi
 }
 
